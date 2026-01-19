@@ -1,172 +1,341 @@
-# Yugastore in Java
+# Yugastore Java
 
-![Homepage](docs/home.png)
-This is an implementation of a sample ecommerce app. This microservices-based retail marketplace or eCommerce app is composed of **microservices written in Spring (Java)**, a **UI based on React** and **YugabyteDB as the [distributed SQL](https://www.yugabyte.com/tech/distributed-sql/) database**.
+![ホームページ](docs/home.png)
 
-If you're using this demo app, please :star: this repository! We appreciate your support.
+## 目次
 
-## Trying it out
+- [1. 概要](#1-概要)
+- [2. ドキュメント構成](#2-ドキュメント構成)
+- [3. システム全体像（アーキテクチャ）](#3-システム全体像アーキテクチャ)
+- [4. ディレクトリ構造（標準）](#4-ディレクトリ構造標準)
+- [5. 技術スタック](#5-技術スタック)
+- [6. クイックスタート（ローカルマシン）](#6-クイックスタートローカルマシン)
 
-This repo contains all the instructions you need to [run the app on your laptop](#building-the-app).
+## 1. 概要
 
-You can also [try the app out](https://yugastore-ui.cfapps.io/) online, it is hosted on [Pivotal Web Services](https://run.pivotal.io/).
+YugastoreはYugabyteDBを使用したマイクロサービスベースのeコマースマーケットプレイスアプリケーションです。Spring Boot（Java）で構築されたマイクロサービス群とReactベースのUIで構成されています。
 
-# Versions
+### 主要特徴
 
-* Java 17
-* Spring Boot 2.6.3
-* Spring Cloud 2021.0.0
-* Yugabyte Java Driver 4.6.0-yb-10
-* Python 3 (Data Loading)
+- **実行方式**: 6つのSpring Bootマイクロサービスで構成され、Eurekaによるサービスディスカバリを使用
+- **トランザクション**: YugabyteDBのYCQL（Cassandra互換）とYSQL（PostgreSQL互換）の両APIを活用し、用途に応じた一貫性レベルを実現
+- **ログ出力方式**: Spring Bootの標準ロギング機能を使用
+- **データ規模**: 6,000件以上の商品データを含むサンプルストア
+- **デプロイ方式**: Dockerコンテナによるデプロイに対応
 
-# Features
+## 2. ドキュメント構成
 
-* Written fully in Spring Framework
-* Desgined for multi-region and Kubernetes-native deployments
-* Features 6 Spring Boot microservices
-* Uses a discovery service that the microservices register with
-* Sample data has over 6K products in the store
+このリポジトリに含まれるドキュメント構成を以下に示します。
 
-## Architecture
+1. **[docs/table_design/table_list.md](docs/table_design/table_list.md) - テーブル設計書（読了時間: 約5分）**
+   - テーブル一覧表（orders, product_inventory, product_rankings, products, shopping_cart）
+   - ER図（Mermaid形式）
 
-The architecture diagram of Yugastore is shown below.
+2. **[resources/README.md](resources/README.md) - データロード手順書（読了時間: 約10分）**
+   - メタデータのパース方法
+   - YugabyteDBへのデータロード手順
+   - データクエリのサンプル
 
-![Architecture of microservices based retail marketplace app](yugastore-java-architecture.png)
+3. **[api-gateway-microservice/README.md](api-gateway-microservice/README.md) - APIゲートウェイ説明書（読了時間: 約3分）**
+   - 前提条件
+   - PCFへのデプロイ手順
 
+4. **[products-microservice/README.md](products-microservice/README.md) - 商品マイクロサービス説明書（読了時間: 約3分）**
+   - 前提条件
+   - PCFへのデプロイ手順
 
-| Microservice         | YugabyteDB API | Default host:port | Description           |
-| -------------------- | ---------------- | ---------------- | --------------------- |
-| [service discovery](https://github.com/yugabyte/yugastore-java/tree/master/eureka-server-local) | - | [localhost:8761](http://localhost:8761) | Uses **Eureka** for localhost. All microservices register with the Eureka service. This registration information is used to discover dynamic properties of any microservice. Examples of discovery include finding the hostnames or ip addresses, the load balancer and the port on which the microservice is currently running.
-| [react-ui](https://github.com/yugabyte/yugastore-java/tree/master/react-ui) | - | [localhost:8080](http://localhost:8080) | A react-based UI for the eCommerce online marketplace app.
-| [api-gateway](https://github.com/yugabyte/yugastore-java/tree/master/api-gateway-microservice) | - | [localhost:8081](http://localhost:8081) | This microservice handles all the external API requests. The UI only communicates with this microservice.
-| [products](https://github.com/yugabyte/yugastore-java/tree/master/products-microservice) | YCQL | [localhost:8082](http://localhost:8082) | This microservice contains the entire product catalog. It can list products by categories, return the most popular products as measured by sales rank, etc.
-| [cart](https://github.com/yugabyte/yugastore-java/tree/master/cart-microservice) | YSQL | [localhost:8083](http://localhost:8083) | This microservice deals with users adding items to the shopping cart. It has to be necessarily highly available, low latency and often multi-region.
-| [checkout](https://github.com/yugabyte/yugastore-java/tree/master/checkout-microservice) | YCQL | [localhost:8086](http://localhost:8086) | This deals with the checkout process and the placed order. It also manages the inventory of all the products because it needs to ensure the product the user is about to order is still in stock.
-| [login](https://github.com/yugabyte/yugastore-java/tree/master/login-microservice) | YSQL | [localhost:8085](http://localhost:8085) | Handles login and authentication of the users. *Note that this is still a work in progress.*
+5. **[react-ui/README.md](react-ui/README.md) - React UIチュートリアル（読了時間: 約30分）**
+   - Create React AppとSpring Bootの統合方法
+   - フロントエンドとバックエンドの連携
+   - Mavenによるパッケージング
 
-# Build and run
+## 3. システム全体像（アーキテクチャ）
 
-To build, simply run the following from the base directory:
+```mermaid
+flowchart TB
+    subgraph クライアント
+        Browser[ブラウザ]
+    end
 
-```
-$ mvn -DskipTests package
-```
+    subgraph フロントエンド
+        ReactUI[React UI<br/>ポート: 8080]
+    end
 
-To run the app on host machine, you need to first install YugabyteDB, create the necessary tables, start each of the microservices and finally the React UI.
+    subgraph サービスディスカバリ
+        Eureka[Eureka Server<br/>ポート: 8761]
+    end
 
-## Running the app on host
+    subgraph APIゲートウェイ層
+        Gateway[API Gateway<br/>ポート: 8081]
+    end
 
-Make sure you have built the app as described above. Now do the following steps.
+    subgraph ビジネスサービス層
+        Products[Products Service<br/>ポート: 8082<br/>YCQL]
+        Cart[Cart Service<br/>ポート: 8083<br/>YSQL]
+        Login[Login Service<br/>ポート: 8085<br/>YSQL]
+        Checkout[Checkout Service<br/>ポート: 8086<br/>YCQL]
+    end
 
-## Step 1: Install and initialize YugabyteDB
+    subgraph データベース層
+        YugabyteDB[(YugabyteDB<br/>YCQL: 9042<br/>YSQL: 5433)]
+    end
 
-You can [install YugabyteDB by following these instructions](https://docs.yugabyte.com/latest/quick-start/).
+    Browser --> ReactUI
+    ReactUI --> Gateway
+    Gateway --> Products
+    Gateway --> Cart
+    Gateway --> Login
+    Gateway --> Checkout
 
-Now create the necessary tables as shown below. Note that these steps would take a few seconds.
+    Products -.->|登録| Eureka
+    Cart -.->|登録| Eureka
+    Login -.->|登録| Eureka
+    Checkout -.->|登録| Eureka
+    Gateway -.->|登録| Eureka
 
-```
-$ cd resources
-$ cqlsh -f schema.cql
-```
-Next, load some sample data.
-
-```
-$ cd resources
-$ ./dataload.sh
-```
-
-Create the postgres tables in `resources/schema.sql` for the YSQL tables.
-
-## Step 2: Start the Eureka service discovery (local)
-
-You can do this as follows:
-
-```
-$ cd eureka-server-local/
-$ mvn spring-boot:run
-```
-
-Verify this is running by browsing to the [Spring Eureka Service Discovery dashboard](http://localhost:8761/).
-
-## Step 2: Start the api gateway microservice
-
-To run the products microservice, do the following in a separate shell:
-
-```
-$ cd api-gateway-microservice/
-$ mvn spring-boot:run
-```
-
-
-## Step 3: Start the products microservice
-
-To run the products microservice, do the following in a separate shell:
-
-```
-$ cd products-microservice/
-$ mvn spring-boot:run
+    Products --> YugabyteDB
+    Cart --> YugabyteDB
+    Login --> YugabyteDB
+    Checkout --> YugabyteDB
 ```
 
-## Step 4: Start the checkout microservice
+### マイクロサービス一覧
 
-To run the products microservice, do the following in a separate shell:
+| マイクロサービス | YugabyteDB API | ホスト:ポート | 説明 |
+| --- | --- | --- | --- |
+| サービスディスカバリ | - | localhost:8761 | Eurekaを使用。全マイクロサービスがEurekaに登録し、動的なプロパティ検出に使用 |
+| React UI | - | localhost:8080 | eコマースマーケットプレイスのReactベースUI |
+| APIゲートウェイ | - | localhost:8081 | 外部APIリクエストを処理。UIはこのサービスとのみ通信 |
+| 商品サービス | YCQL | localhost:8082 | 商品カタログ全体を管理。カテゴリ別商品一覧、売上ランキング等を提供 |
+| カートサービス | YSQL | localhost:8083 | ショッピングカートへの商品追加を処理。高可用性・低レイテンシが必要 |
+| チェックアウトサービス | YCQL | localhost:8086 | チェックアウトプロセスと注文を処理。在庫管理も担当 |
+| ログインサービス | YSQL | localhost:8085 | ユーザーのログインと認証を処理 |
 
-```
-$ cd checkout-microservice/
-$ mvn spring-boot:run
-```
-
-## Step 5: Start the checkout microservice
-
-To run the cart microservice, do the following in a separate shell:
-
-```
-$ cd cart-microservice/
-$ mvn spring-boot:run
-```
-
-## Step 6: Start the UI
-
-To do this, simply run `npm start` from the `frontend` directory in a separate shell:
+## 4. ディレクトリ構造（標準）
 
 ```
-$ cd react-ui
-$ mvn spring-boot:run
+yugastore-java-kn/
+├── README.md                      # プロジェクト概要（本ファイル）
+├── pom.xml                        # 親Mavenプロジェクト設定
+├── docker-run.sh                  # Dockerコンテナ起動スクリプト
+├── yugastore-java-architecture.png # アーキテクチャ図
+│
+├── api-gateway-microservice/      # APIゲートウェイ（ポート8081）
+│   ├── pom.xml
+│   ├── Dockerfile
+│   └── src/
+│
+├── cart-microservice/             # カートサービス（ポート8083、YSQL）
+│   ├── pom.xml
+│   ├── Dockerfile
+│   └── src/
+│
+├── checkout-microservice/         # チェックアウトサービス（ポート8086、YCQL）
+│   ├── pom.xml
+│   ├── Dockerfile
+│   └── src/
+│
+├── eureka-server-local/           # サービスディスカバリ（ポート8761）
+│   ├── pom.xml
+│   ├── Dockerfile
+│   └── src/
+│
+├── login-microservice/            # ログインサービス（ポート8085、YSQL）
+│   ├── pom.xml
+│   ├── Dockerfile
+│   └── src/
+│
+├── products-microservice/         # 商品サービス（ポート8082、YCQL）
+│   ├── pom.xml
+│   ├── Dockerfile
+│   └── src/
+│
+├── react-ui/                      # React UI（ポート8080）
+│   ├── pom.xml
+│   ├── frontend/                  # Reactソースコード
+│   └── src/                       # Spring Boot静的サーバー
+│
+├── resources/                     # データベーススキーマとデータロードスクリプト
+│   ├── README.md
+│   ├── schema.cql                 # YCQL用スキーマ
+│   ├── schema.sql                 # YSQL用スキーマ
+│   ├── dataload.sh                # データロードスクリプト
+│   └── products.json              # 商品データ
+│
+└── docs/                          # ドキュメント
+    ├── table_design/              # テーブル設計書
+    │   └── table_list.md
+    ├── screen-design/             # 画面設計書
+    └── *.png                      # スクリーンショット
 ```
 
-Now browse to the marketplace app at [http://localhost:8080/](http://localhost:8080/).
+## 5. 技術スタック
 
-# Running the app in docker containers
+### 5.1 共通
 
-The dockers images are built along with the binaries when `mvn -DskipTests package` was run.
-To run the docker containers, run the following script, after you have [Installed and initialized YugabyteDB](#step-1-install-and-initialize-yugabyte-db):
+| カテゴリ | 技術 |
+| --- | --- |
+| **言語** | Java 17 |
+| **ビルドツール** | Maven |
+| **フレームワーク** | Spring Boot 2.6.3 |
+| **クラウドフレームワーク** | Spring Cloud 2021.0.0 |
+| **コンテナ** | Docker |
+| **データベース** | YugabyteDB（YCQL/YSQL） |
+| **データロード** | Python 3 |
 
+### 5.2 各マイクロサービス別
+
+#### サービスディスカバリ（eureka-server-local）
+
+| カテゴリ | 技術 |
+| --- | --- |
+| **フレームワーク** | Spring Cloud Netflix Eureka Server |
+| **ポート** | 8761 |
+
+#### APIゲートウェイ（api-gateway-microservice）
+
+| カテゴリ | 技術 |
+| --- | --- |
+| **フレームワーク** | Spring Boot + Spring Cloud OpenFeign |
+| **ポート** | 8081 |
+| **通信** | Feignクライアントによるサービス間通信 |
+
+#### 商品サービス（products-microservice）
+
+| カテゴリ | 技術 |
+| --- | --- |
+| **フレームワーク** | Spring Boot + Spring Data Cassandra |
+| **データベースAPI** | YCQL（Cassandra互換） |
+| **ドライバ** | Yugabyte Java Driver 4.6.0-yb-10 |
+| **ポート** | 8082 |
+
+#### カートサービス（cart-microservice）
+
+| カテゴリ | 技術 |
+| --- | --- |
+| **フレームワーク** | Spring Boot + Spring Data JPA |
+| **データベースAPI** | YSQL（PostgreSQL互換） |
+| **ポート** | 8083 |
+
+#### ログインサービス（login-microservice）
+
+| カテゴリ | 技術 |
+| --- | --- |
+| **フレームワーク** | Spring Boot + Spring Security + Spring Data JPA |
+| **データベースAPI** | YSQL（PostgreSQL互換） |
+| **ポート** | 8085 |
+
+#### チェックアウトサービス（checkout-microservice）
+
+| カテゴリ | 技術 |
+| --- | --- |
+| **フレームワーク** | Spring Boot + Spring Data Cassandra |
+| **データベースAPI** | YCQL（Cassandra互換） |
+| **ポート** | 8086 |
+
+#### React UI（react-ui）
+
+| カテゴリ | 技術 |
+| --- | --- |
+| **フロントエンド** | React 16.2.0 |
+| **ランタイム** | Node.js 16.13.2 |
+| **バックエンド** | Spring Boot（静的ファイル配信） |
+| **ビルド統合** | frontend-maven-plugin |
+| **ポート** | 8080 |
+
+## 6. クイックスタート（ローカルマシン）
+
+### 6.1 コンテナ起動
+
+#### 前提条件
+
+- Docker がインストールされていること
+- YugabyteDB がインストールされ、起動していること
+
+#### ビルド
+
+プロジェクトのルートディレクトリで以下のコマンドを実行します。
+
+```bash
+mvn -DskipTests package
 ```
-$ ./docker-run.sh
+
+このコマンドにより、各マイクロサービスのJARファイルとDockerイメージが作成されます。
+
+#### Dockerコンテナの起動
+
+```bash
+./docker-run.sh
 ```
-Check all the services are registered on the [eureka-server](http://127.0.0.1:8761/).
-Once all services are registered, you can browse the marketplace app at [http://localhost:8080/](http://localhost:8080/).
 
+全サービスが[Eurekaダッシュボード](http://127.0.0.1:8761/)に登録されていることを確認してください。
 
+### 6.2 テストデータ格納
 
-## Screenshots
+#### YCQLテーブルの作成
 
+```bash
+cd resources
+cqlsh -f schema.cql
+```
 
-### Home
-![Home Page](docs/home.png)
+#### YSQLテーブルの作成
 
-### Product Category Page
+`resources/schema.sql`のSQLを実行してYSQLテーブルを作成します。
 
-![Product Category](docs/product-category.png)
+#### サンプルデータのロード
 
-### Product Detail Page
+```bash
+cd resources
+./dataload.sh
+```
 
-![Product Page](docs/product.png)
+### 6.3 API起動とテスト（オプション）
 
-### Car
+Dockerを使用せずにホストマシンで直接起動する場合は、以下の順序で各サービスを起動します。
 
-![Cart](docs/cart.png)
+#### ステップ1: Eurekaサービスディスカバリの起動
 
-## Checkout
+```bash
+cd eureka-server-local/
+mvn spring-boot:run
+```
 
-![Checkout](docs/checkout.png)
+[Spring Eureka Service Discovery ダッシュボード](http://localhost:8761/)で起動を確認します。
+
+#### ステップ2: APIゲートウェイの起動
+
+```bash
+cd api-gateway-microservice/
+mvn spring-boot:run
+```
+
+#### ステップ3: 商品サービスの起動
+
+```bash
+cd products-microservice/
+mvn spring-boot:run
+```
+
+#### ステップ4: チェックアウトサービスの起動
+
+```bash
+cd checkout-microservice/
+mvn spring-boot:run
+```
+
+#### ステップ5: カートサービスの起動
+
+```bash
+cd cart-microservice/
+mvn spring-boot:run
+```
+
+#### ステップ6: UIの起動
+
+```bash
+cd react-ui/
+mvn spring-boot:run
+```
+
+マーケットプレイスアプリケーションに[http://localhost:8080/](http://localhost:8080/)でアクセスできます。
