@@ -49,6 +49,28 @@ YugastoreはYugabyteDBを使用したマイクロサービスベースのeコマ
    - フロントエンドとバックエンドの連携
    - Mavenによるパッケージング
 
+6. **[docs/screen-design/screen_list.md](docs/screen-design/screen_list.md) - 画面一覧・画面遷移図（読了時間: 約3分）**
+   - 画面一覧表（ホーム画面、商品一覧画面、商品詳細画面、カート画面）
+   - 画面遷移図（Mermaid形式）
+
+7. **[docs/screen-design/home.md](docs/screen-design/home.md) - ホーム画面設計書（読了時間: 約10分）**
+   - 画面項目定義
+   - 画面処理設計
+   - 画面レイアウト
+   - データマッピング
+
+8. **[docs/screen-design/products.md](docs/screen-design/products.md) - 商品一覧画面設計書（読了時間: 約15分）**
+   - 画面項目定義
+   - 画面処理設計
+   - 画面レイアウト
+   - データマッピング
+
+9. **[docs/screen-design/cart.md](docs/screen-design/cart.md) - カート画面設計書（読了時間: 約15分）**
+   - 画面項目定義
+   - 画面処理設計
+   - 画面レイアウト
+   - データマッピング
+
 ## 3. システム全体像（アーキテクチャ）
 
 ```mermaid
